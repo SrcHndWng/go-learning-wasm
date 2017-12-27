@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/hex"
 	"flag"
-	"fmt"
 	"html"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
@@ -12,6 +12,10 @@ import (
 )
 
 var port int
+
+type viewData struct {
+	Wasm string
+}
 
 func main() {
 	flag.IntVar(&port, "port", 8080, "server port.")
@@ -29,7 +33,15 @@ func main() {
 }
 
 func rootHandle(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, page, html.EscapeString(hex.Dump(wasmAdd)))
+	t, err := template.ParseFiles("templates/index.html")
+	if err != nil {
+		log.Fatal(err)
+	}
+	data := viewData{Wasm: html.EscapeString(hex.Dump(wasmAdd))}
+	err = t.Execute(w, data)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func wasmHandle(w http.ResponseWriter, r *http.Request) {
@@ -52,43 +64,3 @@ var wasmAdd = []byte{
 	0x01, 0x07, 0x00, 0x20, 0x00, 0x20, 0x01, 0x6a,
 	0x0b,
 }
-
-const page = `
-<html>
-	<head>
-		<title>Testing WebAssembly</title>
-		<script type="text/javascript">
-
-		function fetchAndInstantiate(url, importObject) {
-			return fetch(url).then(response =>
-				response.arrayBuffer()
-			).then(bytes =>
-				WebAssembly.instantiate(bytes, importObject)
-			).then(results =>
-			    results.instance
-			);
-		}
-
-		var mod = fetchAndInstantiate("/wasm", {});
-
-		window.onload = function() {
-			mod.then(function(instance) {
-				var div = document.getElementById("wasm-result");
-				div.innerHTML = "<code>add(1, 2)= " + instance.exports.add(1, 2) + "</code>";
-			});
-		};
-
-		</script>
-	</head>
-
-	<body>
-		<h2>WebAssembly content</h2>
-		<div id="wasm-content">
-			<pre>%s</pre>
-		</div>
-
-		<h2>WebAssembly</h2>
-		<div id="wasm-result"><code>add(1, 2)= N/A</code></div>
-	</body>
-</html>
-`
